@@ -120,6 +120,23 @@ struct ec_method_st {
      * EC_POINT_have_precompute_mult (default implementations are used if the
      * 'mul' pointer is 0):
      */
+    /*-
+     * mul() calculates the value
+     *
+     *   r := generator * scalar
+     *        + points[0] * scalars[0]
+     *        + ...
+     *        + points[num-1] * scalars[num-1].
+     *
+     * For a fixed point multiplication (scalar != NULL, num == 0)
+     * or a variable point multiplication (scalar == NULL, num == 1),
+     * mul() must use a constant time algorithm: in both cases callers
+     * should provide an input scalar (either scalar or scalars[0])
+     * in the range [0, ec_group_order); for robustness, implementers
+     * should handle the case when the scalar has not been reduced, but
+     * may treat it as an unusual input, without any constant-timeness
+     * guarantee.
+     */
     int (*mul) (const EC_GROUP *group, EC_POINT *r, const BIGNUM *scalar,
                 size_t num, const EC_POINT *points[], const BIGNUM *scalars[],
                 BN_CTX *);
@@ -425,14 +442,6 @@ int ec_GF2m_simple_field_sqr(const EC_GROUP *, BIGNUM *r, const BIGNUM *a,
                              BN_CTX *);
 int ec_GF2m_simple_field_div(const EC_GROUP *, BIGNUM *r, const BIGNUM *a,
                              const BIGNUM *b, BN_CTX *);
-
-/* method functions in ec2_mult.c */
-int ec_GF2m_simple_mul(const EC_GROUP *group, EC_POINT *r,
-                       const BIGNUM *scalar, size_t num,
-                       const EC_POINT *points[], const BIGNUM *scalars[],
-                       BN_CTX *);
-int ec_GF2m_precompute_mult(EC_GROUP *group, BN_CTX *ctx);
-int ec_GF2m_have_precompute_mult(const EC_GROUP *group);
 
 #ifndef OPENSSL_NO_EC_NISTP_64_GCC_128
 /* method functions in ecp_nistp224.c */
