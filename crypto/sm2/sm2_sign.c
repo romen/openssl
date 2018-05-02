@@ -118,7 +118,7 @@ ECDSA_SIG *SM2_sig_gen(const EC_KEY *key, const BIGNUM *e)
             continue;
 
         BN_add(s, dA, BN_value_one());
-        BN_mod_inverse(s, s, order, ctx);
+        EC_GROUP_do_inverse_ord(group, s, s, ctx);
 
         BN_mod_mul(tmp, dA, r, order, ctx);
         BN_sub(tmp, k, tmp);
