@@ -574,9 +574,13 @@ static double ecdh_results[EC_NUM][1];  /* 1 op: derivation */
 
 #define R_EC_Ed25519    0
 #define R_EC_Ed448      1
+#define R_EVP_EC_P256   2
+#define R_EVP_EC_P521   3
 static OPT_PAIR eddsa_choices[] = {
     {"ed25519", R_EC_Ed25519},
-    {"ed448", R_EC_Ed448}
+    {"ed448", R_EC_Ed448},
+    {"evpecdsap256", R_EVP_EC_P256},
+    {"evpecdsap521", R_EVP_EC_P521}
 };
 # define EdDSA_NUM       OSSL_NELEM(eddsa_choices)
 
@@ -1184,11 +1188,19 @@ static int EdDSA_sign_loop(void *args)
     loopargs_t *tempargs = *(loopargs_t **) args;
     unsigned char *buf = tempargs->buf;
     EVP_MD_CTX **edctx = tempargs->eddsa_ctx;
+    EVP_PKEY *pkey = (EVP_PKEY*)tempargs->key;
     unsigned char *eddsasig = tempargs->buf2;
     unsigned int *eddsasiglen = &tempargs->siglen;
     int ret, count;
 
     for (count = 0; COND(eddsa_c[testnum][0]); count++) {
+        *eddsasiglen = tempargs->outlen[0];
+        if (!EVP_DigestSignInit(edctx[testnum], NULL, NULL, NULL, pkey)) {
+            BIO_printf(bio_err, "EVP_DigestSignInit failure\n");
+            ERR_print_errors(bio_err);
+            count = -1;
+            break;
+        }
         ret = EVP_DigestSign(edctx[testnum], eddsasig, (size_t *)eddsasiglen, buf, 20);
         if (ret == 0) {
             BIO_printf(bio_err, "EdDSA sign failure\n");
@@ -1205,11 +1217,18 @@ static int EdDSA_verify_loop(void *args)
     loopargs_t *tempargs = *(loopargs_t **) args;
     unsigned char *buf = tempargs->buf;
     EVP_MD_CTX **edctx = tempargs->eddsa_ctx;
+    EVP_PKEY *pkey = (EVP_PKEY*)tempargs->key;
     unsigned char *eddsasig = tempargs->buf2;
     unsigned int eddsasiglen = tempargs->siglen;
     int ret, count;
 
     for (count = 0; COND(eddsa_c[testnum][1]); count++) {
+        if (!EVP_DigestVerifyInit(edctx[testnum], NULL, NULL, NULL, pkey)) {
+            BIO_printf(bio_err, "EVP_DigestVerifyInit failure\n");
+            ERR_print_errors(bio_err);
+            count = -1;
+            break;
+        }
         ret = EVP_DigestVerify(edctx[testnum], eddsasig, eddsasiglen, buf, 20);
         if (ret != 1) {
             BIO_printf(bio_err, "EdDSA verify failure\n");
@@ -1529,7 +1548,9 @@ int speed_main(int argc, char **argv)
     } test_ed_curves[] = {
         /* EdDSA */
         {"Ed25519", NID_ED25519, 253, 64},
-        {"Ed448", NID_ED448, 448, 114}
+        {"Ed448", NID_ED448, 448, 114},
+        {"nistp256", NID_X9_62_prime256v1, 256, 128},
+        {"nistp521", NID_secp521r1, 521, 256}
     };
     int ecdsa_doit[ECDSA_NUM] = { 0 };
     int ecdh_doit[EC_NUM] = { 0 };
@@ -2121,6 +2142,12 @@ int speed_main(int argc, char **argv)
 
     eddsa_c[R_EC_Ed25519][0] = count / 1800;
     eddsa_c[R_EC_Ed448][0] = count / 7200;
+
+    eddsa_c[R_EVP_EC_P256][0] = ecdsa_c[R_EC_P256][0];
+    eddsa_c[R_EVP_EC_P256][1] = ecdsa_c[R_EC_P256][1];
+
+    eddsa_c[R_EVP_EC_P521][0] = ecdsa_c[R_EC_P521][0];
+    eddsa_c[R_EVP_EC_P521][1] = ecdsa_c[R_EC_P521][1];
 #  endif
 
 # else
@@ -3076,16 +3103,75 @@ int speed_main(int argc, char **argv)
                 break;
             }
 
-            if ((ed_pctx = EVP_PKEY_CTX_new_id(test_ed_curves[testnum].nid, NULL))
-                    == NULL
-                || !EVP_PKEY_keygen_init(ed_pctx)
-                || !EVP_PKEY_keygen(ed_pctx, &ed_pkey)) {
+            if ((ed_pctx = EVP_PKEY_CTX_new_id(test_ed_curves[testnum].nid, NULL)) == NULL ) {
+                EVP_PKEY_CTX *kctx = NULL;
+                EVP_PKEY_CTX *pctx = NULL;
+                EVP_PKEY *params = NULL;
+
+                /* If we reach this code EVP_PKEY_CTX_new_id() failed and a
+                 * "int_ctx_new:unsupported algorithm" error was added to the
+                 * error queue.
+                 * We remove it from the error queue as we are handling it. */
+                unsigned long error = ERR_peek_error(); /* peek the latest error in the queue */
+                if (error == ERR_peek_last_error() && /* oldest and latest errors match */
+                    /* check that the error origin matches */
+                    ERR_GET_LIB(error) == ERR_LIB_EVP &&
+                    ERR_GET_FUNC(error) == EVP_F_INT_CTX_NEW &&
+                    ERR_GET_REASON(error) == EVP_R_UNSUPPORTED_ALGORITHM)
+                    ERR_get_error(); /* pop error from queue */
+                if (ERR_peek_error()) {
+                    BIO_printf(bio_err,
+                               "Unhandled error in the error queue during EVP_ECDSA init.\n");
+                    ERR_print_errors(bio_err);
+                    st = 0;
+                    break;
+                }
+
+                if (            /* Create the context for parameter generation */
+                       !(pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL)) ||
+                       /* Initialise the parameter generation */
+                       !EVP_PKEY_paramgen_init(pctx) ||
+                       /* Set the curve by NID */
+                       !EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx,
+                                                               test_ed_curves
+                                                               [testnum].nid) ||
+                       /* Create the parameter object params */
+                       !EVP_PKEY_paramgen(pctx, &params)) {
+                    BIO_printf(bio_err, "EVP EC params init failure.\n");
+                    ERR_print_errors(bio_err);
+                    st = 0;
+                    break;
+                }
+
+                /* Create the context for the key generation */
+                kctx = EVP_PKEY_CTX_new(params, NULL);
+
+                EVP_PKEY_free(params);
+                params = NULL;
+                EVP_PKEY_CTX_free(pctx);
+                pctx = NULL;
+
+                if (kctx == NULL         /* keygen ctx is not null */
+                    || !EVP_PKEY_keygen_init(kctx) /* init keygen ctx */
+                    || !EVP_PKEY_keygen(kctx, &ed_pkey)) {
+                    EVP_PKEY_CTX_free(kctx);
+                    BIO_printf(bio_err, "EVP EC keygen failure.\n");
+                    ERR_print_errors(bio_err);
+                    st = 0;
+                    break;
+                }
+                EVP_PKEY_CTX_free(kctx);
+            } else if (!EVP_PKEY_keygen_init(ed_pctx)
+                       || !EVP_PKEY_keygen(ed_pctx, &ed_pkey)) {
                 st = 0;
                 break;
             }
 
-            EVP_DigestSignInit(loopargs[i].eddsa_ctx[testnum], NULL, NULL,
-                               NULL, ed_pkey);
+            if (!EVP_DigestSignInit(loopargs[i].eddsa_ctx[testnum], NULL, NULL,
+                                    NULL, ed_pkey)) {
+                st = 0;
+                break;
+            }
         }
         if (st == 0) {
             BIO_printf(bio_err, "EdDSA failure.\n");
@@ -3094,7 +3180,8 @@ int speed_main(int argc, char **argv)
         } else {
             for (i = 0; i < loopargs_len; i++) {
                 /* Perform EdDSA signature test */
-                loopargs[i].siglen = test_ed_curves[testnum].siglen;
+                loopargs[i].key = (void*)ed_pkey;
+                loopargs[i].outlen[0] = loopargs[i].siglen = test_ed_curves[testnum].siglen;
                 st = EVP_DigestSign(loopargs[i].eddsa_ctx[testnum],
                                     loopargs[i].buf2, (size_t *)&loopargs[i].siglen,
                                     loopargs[i].buf, 20);
@@ -3125,6 +3212,11 @@ int speed_main(int argc, char **argv)
 
             /* Perform EdDSA verification test */
             for (i = 0; i < loopargs_len; i++) {
+                if (!EVP_DigestVerifyInit(loopargs[i].eddsa_ctx[testnum],
+                                          NULL, NULL, NULL, ed_pkey)) {
+                    st = 0;
+                    break;
+                }
                 st = EVP_DigestVerify(loopargs[i].eddsa_ctx[testnum],
                                       loopargs[i].buf2, loopargs[i].siglen,
                                       loopargs[i].buf, 20);
