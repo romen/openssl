@@ -16,9 +16,6 @@
 #include "internal/nelem.h"
 #include "internal/o_str.h"
 
-/* The maximum size of the order field used in the curve data tables */
-# define MAX_CURVE_ORDER_LEN (571 + 7) / 8
-
 typedef struct {
     int field_type,             /* either NID_X9_62_prime_field or
                                  * NID_X9_62_characteristic_two_field */
@@ -1140,6 +1137,7 @@ static const struct {
     },
     {
         /* no seed */
+        /* p */
         0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
@@ -1213,6 +1211,7 @@ static const struct {
     },
     {
         /* no seed */
+        /* p */
         0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
@@ -1248,6 +1247,7 @@ static const struct {
     },
     {
         /* no seed */
+        /* p */
         0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0xA1,
@@ -1282,7 +1282,7 @@ static const struct {
         NID_X9_62_characteristic_two_field, 20, 36, 2
     },
     {
-        /* no seed */
+        /* seed */
         0x77, 0xE2, 0xB0, 0x73, 0x70, 0xEB, 0x0F, 0x83, 0x2A, 0x6D, 0xD5, 0xB6,
         0x2D, 0xFC, 0x88, 0xCD, 0x06, 0xBB, 0x84, 0xBE,
         /* p */
@@ -3207,14 +3207,15 @@ int EC_curve_nist2nid(const char *name)
  * This can be used when a curve is loaded explicitly (without a curve
  * name) or to validate that domain parameters have not been modified.
  *
- * Returns: The nid associated with the found named curve or O if not found.
+ * Returns: The nid associated with the found named curve, or NID_undef
+ *          if not found. If there was an error it returns -1.
  */
 int ec_curve_nid_from_params(const EC_GROUP *group)
 {
-    int ret = 0, nid, len, field_type, group_ord_bytes_len;
+    int ret = -1, nid, len, field_type, group_ord_bytes_len, rv;
     size_t i, seed_len;
     const unsigned char *seed, *params_seed, *params_order;
-    unsigned char group_ord_bytes[MAX_CURVE_ORDER_LEN];
+    unsigned char *group_ord_bytes = NULL;
     const EC_CURVE_DATA *data;
     const EC_METHOD *meth;
     EC_GROUP *tmp = NULL;
@@ -3222,21 +3223,31 @@ int ec_curve_nid_from_params(const EC_GROUP *group)
 
     meth = EC_GROUP_method_of(group);
     if (meth == NULL)
-        return 0;
+        return -1;
     /* Use the optional named curve nid as a search field */
     nid = EC_GROUP_get_curve_name(group);
     field_type = EC_METHOD_get_field_type(meth);
     seed_len = EC_GROUP_get_seed_len(group);
     seed = EC_GROUP_get0_seed(group);
-    group_ord_bytes_len = (EC_GROUP_get_degree(group) + 7) / 8;
+
+    len = BN_num_bytes(group->order);
+    group_ord_bytes_len = BN_num_bytes(group->field);
+    /* some of the p values are zero padded in the internal prime tables */
+    if (len > group_ord_bytes_len)
+        group_ord_bytes_len = len;
+    group_ord_bytes = OPENSSL_malloc(group_ord_bytes_len);
+    if (group_ord_bytes == NULL)
+        goto err;
+
     /* There can be zeros in the top of the order field - so zero pad it */
     len = BN_bn2binpad(group->order, group_ord_bytes, group_ord_bytes_len);
     if (len <= 0)
-        return 0;
+        goto err;
 
     ctx = BN_CTX_new();
     if (ctx == NULL)
-        return 0;
+        goto err;
+
     for (i = 0; i < curve_list_length; i++)
     {
         const ec_list_element curve = curve_list[i];
@@ -3249,22 +3260,33 @@ int ec_curve_nid_from_params(const EC_GROUP *group)
         if (data->field_type == field_type
                 && len == data->param_len
                 && (nid <= 0 || nid == curve.nid)
-                && (data->seed_len == 0
+                /* Check the optional seed (ignore if its not set) */
+                && (data->seed_len == 0 || seed_len == 0
                     || ((size_t)data->seed_len == seed_len
                         && OPENSSL_memcmp(params_seed, seed, seed_len) == 0))
                 && OPENSSL_memcmp(group_ord_bytes, params_order, len) == 0) {
             tmp = ec_group_new_from_data(curve);
             if (tmp == NULL)
-                break;
+                goto err; /* Error */
             /* Check that the passed in curve matches the approved curve */
-            if (EC_GROUP_cmp(group, tmp, ctx) == 0) {
-                ret = curve.nid;
-                break;
+            rv = EC_GROUP_cmp(group, tmp, ctx);
+            if (rv <= 0) {
+                /*
+                 * Return the NID if the groups are same,
+                 * otherwise return an error
+                 */
+                if (rv == 0)
+                    ret = curve.nid;
+                goto err;
             }
             EC_GROUP_free(tmp);
             tmp = NULL;
         }
     }
+    /* Gets here if the group was not found */
+    ret = NID_undef;
+err:
+    OPENSSL_free(group_ord_bytes);
     EC_GROUP_free(tmp);
     BN_CTX_free(ctx);
     return ret;

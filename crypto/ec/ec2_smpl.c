@@ -855,7 +855,8 @@ int ec_GF2m_simple_points_mul(const EC_GROUP *group, EC_POINT *r,
      * We also let the default implementation handle degenerate cases like group
      * order or cofactor set to 0.
      */
-    if (num > 1 || BN_is_zero(group->order) || BN_is_zero(group->cofactor))
+    if (num > 1 || BN_is_zero(group->order) || group->cofactor == NULL
+        || BN_is_zero(group->cofactor))
         return ec_wNAF_mul(group, r, scalar, num, points, scalars, ctx);
 
     if (scalar != NULL && num == 0)
