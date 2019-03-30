@@ -145,10 +145,12 @@ The function EC_GROUP_check performs a number of checks on a curve to verify tha
 verifying that the discriminant is non zero; that a generator has been defined; that the generator is on the curve and has
 the correct order.
 
-EC_GROUP_check_named_curve determines if the groups domain parameters match one of the built in curves supported by the library.
-The curve name is returned as a B<NID> if it matches. If the groups domain parameters have been modified then no match will be found.
+EC_GROUP_check_named_curve determines if the group's domain parameters match one of the built in curves supported by the library.
+The curve name is returned as a B<NID> if it matches. If the group's domain parameters have been modified then no match will be found.
 If the curve name of the given group is B<NID_undef> (e.g. it has been created by using explicit parameters with no curve name),
-then this method can be used to lookup the name of the curve that matches the group domain parameters.
+then this method can be used to lookup the name of the curve that matches the group domain parameters. The built in curves contain
+aliases, so that multiple NID's can map to the same domain parameters. For such curves it is unspecified which of the aliases will be
+returned if the curve name of the given group is NID_undef.
 If B<nist_only> is 1 it will only look for NIST approved curves, otherwise it searches all built in curves.
 
 EC_GROUP_cmp compares B<a> and B<b> to determine whether they represent the same curve or not.
@@ -207,6 +209,10 @@ trinomial or pentanomial respectively. Alternatively in the event of an error a 
 L<crypto(7)>, L<EC_GROUP_new(3)>,
 L<EC_POINT_new(3)>, L<EC_POINT_add(3)>, L<EC_KEY_new(3)>,
 L<EC_GFp_simple_method(3)>, L<d2i_ECPKParameters(3)>
+
+=head1 HISTORY
+
+The EC_GROUP_check_named_curve() function was added in OpenSSL 3.0.
 
 =head1 COPYRIGHT
 

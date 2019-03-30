@@ -290,15 +290,10 @@ int EC_GROUP_set_generator(EC_GROUP *group, const EC_POINT *generator,
 
     /* The cofactor is an optional field, so it should be able to be NULL. */
     if (cofactor != NULL) {
-        if (group->cofactor == NULL) {
-            if ((group->cofactor = BN_dup(cofactor)) == NULL)
-                return 0;
-        } else if (!BN_copy(group->cofactor, cofactor)) {
+        if (!BN_copy(group->cofactor, cofactor))
             return 0;
-        }
     } else {
-        BN_free(group->cofactor);
-        group->cofactor = NULL;
+        BN_zero(group->cofactor);
     }
     /*
      * Some groups have an order with
@@ -567,11 +562,8 @@ int EC_GROUP_cmp(const EC_GROUP *a, const EC_GROUP *b, BN_CTX *ctx)
          */
         ac = EC_GROUP_get0_cofactor(a);
         bc = EC_GROUP_get0_cofactor(b);
-        /* Returns 0 (matched) if either cofactor is missing */
-        if (ac == NULL || bc == NULL)
-            goto end;
-        /* Returns 1 if the cofactors are different */
-        if (BN_cmp(ac, bc) != 0)
+        /* Returns 1 (mismatch) if both cofactors are specified and different */
+        if (!BN_is_zero(ac) && !BN_is_zero(bc) && BN_cmp(ac, bc) != 0)
             r = 1;
         /* Returns 0 if the parameters matched */
     }

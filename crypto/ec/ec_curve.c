@@ -3202,6 +3202,7 @@ int EC_curve_nist2nid(const char *name)
     return NID_undef;
 }
 
+#define NUM_BN_FIELDS 6
 /*
  * Validates EC domain parameter data for known named curves.
  * This can be used when a curve is loaded explicitly (without a curve
@@ -3212,13 +3213,16 @@ int EC_curve_nist2nid(const char *name)
  */
 int ec_curve_nid_from_params(const EC_GROUP *group)
 {
-    int ret = -1, nid, len, field_type, group_ord_bytes_len, rv;
+    int ret = -1, nid, len, field_type, param_len;
     size_t i, seed_len;
-    const unsigned char *seed, *params_seed, *params_order;
-    unsigned char *group_ord_bytes = NULL;
+    const unsigned char *seed, *params_seed, *params;
+    unsigned char *param_bytes = NULL;
     const EC_CURVE_DATA *data;
+    const EC_POINT *generator = NULL;
     const EC_METHOD *meth;
-    EC_GROUP *tmp = NULL;
+    const BIGNUM *cofactor = NULL;
+    /* An array of BIGNUMs for (p, a, b, x, y, order) */
+    BIGNUM *bn[NUM_BN_FIELDS] = {NULL, NULL, NULL, NULL, NULL, NULL};
     BN_CTX *ctx = NULL;
 
     meth = EC_GROUP_method_of(group);
@@ -3229,65 +3233,88 @@ int ec_curve_nid_from_params(const EC_GROUP *group)
     field_type = EC_METHOD_get_field_type(meth);
     seed_len = EC_GROUP_get_seed_len(group);
     seed = EC_GROUP_get0_seed(group);
-
-    len = BN_num_bytes(group->order);
-    group_ord_bytes_len = BN_num_bytes(group->field);
-    /* some of the p values are zero padded in the internal prime tables */
-    if (len > group_ord_bytes_len)
-        group_ord_bytes_len = len;
-    group_ord_bytes = OPENSSL_malloc(group_ord_bytes_len);
-    if (group_ord_bytes == NULL)
-        goto err;
-
-    /* There can be zeros in the top of the order field - so zero pad it */
-    len = BN_bn2binpad(group->order, group_ord_bytes, group_ord_bytes_len);
-    if (len <= 0)
-        goto err;
+    cofactor = EC_GROUP_get0_cofactor(group);
 
     ctx = BN_CTX_new();
     if (ctx == NULL)
-        goto err;
+        return -1;
+    BN_CTX_start(ctx);
 
-    for (i = 0; i < curve_list_length; i++)
-    {
+    /*
+     * The in built curves contains data fields (p, a, b, x, y, order) that are
+     * all zero padded to be the same size. The size of the padding is
+     * determined by either the number of bytes in the field modulus (p) or the
+     * EC group order, whichever is larger.
+     */
+    param_len = BN_num_bytes(group->order);
+    len = BN_num_bytes(group->field);
+    if (len > param_len)
+        param_len = len;
+
+    /* Allocate space to store the padded data for (p, a, b, x, y, order)  */
+    param_bytes = OPENSSL_malloc(param_len * NUM_BN_FIELDS);
+    if (param_bytes == NULL)
+        goto end;
+
+    /* Create the bignums */
+    for (i = 0; i < NUM_BN_FIELDS; ++i) {
+        if ((bn[i] = BN_CTX_get(ctx)) == NULL)
+            goto end;
+    }
+    /*
+     * Fill in the bn array with the same values as the internal curves
+     * i.e. the values are p, a, b, x, y, order.
+     */
+    /* Get p, a & b */
+    if (!(EC_GROUP_get_curve(group, bn[0], bn[1], bn[2], ctx)
+        && ((generator = EC_GROUP_get0_generator(group)) != NULL)
+        /* Get x & y */
+        && EC_POINT_get_affine_coordinates(group, generator, bn[3], bn[4], ctx)
+        /* Get order */
+        && EC_GROUP_get_order(group, bn[5], ctx)))
+        goto end;
+
+   /*
+     * Convert the bignum array to bytes that are joined together to form
+     * a single buffer that contains data for all fields.
+     * (p, a, b, x, y, order) are all zero padded to be the same size.
+     */
+    for (i = 0; i < NUM_BN_FIELDS; ++i) {
+        if (BN_bn2binpad(bn[i], &param_bytes[i*param_len], param_len) <= 0)
+            goto end;
+    }
+
+    for (i = 0; i < curve_list_length; i++) {
         const ec_list_element curve = curve_list[i];
 
         data = curve.data;
         /* Get the raw order byte data */
         params_seed = (const unsigned char *)(data + 1); /* skip header */
-        params_order =  params_seed + data->seed_len + 5 * data->param_len;
+        params = params_seed + data->seed_len;
+
         /* Look for unique fields in the fixed curve data */
         if (data->field_type == field_type
-                && len == data->param_len
-                && (nid <= 0 || nid == curve.nid)
-                /* Check the optional seed (ignore if its not set) */
-                && (data->seed_len == 0 || seed_len == 0
-                    || ((size_t)data->seed_len == seed_len
-                        && OPENSSL_memcmp(params_seed, seed, seed_len) == 0))
-                && OPENSSL_memcmp(group_ord_bytes, params_order, len) == 0) {
-            tmp = ec_group_new_from_data(curve);
-            if (tmp == NULL)
-                goto err; /* Error */
-            /* Check that the passed in curve matches the approved curve */
-            rv = EC_GROUP_cmp(group, tmp, ctx);
-            if (rv <= 0) {
-                /*
-                 * Return the NID if the groups are same,
-                 * otherwise return an error
-                 */
-                if (rv == 0)
-                    ret = curve.nid;
-                goto err;
-            }
-            EC_GROUP_free(tmp);
-            tmp = NULL;
+            && param_len == data->param_len
+            && (nid <= 0 || nid == curve.nid)
+            /* check the optional cofactor (ignore if its zero) */
+            && (BN_is_zero(cofactor)
+                || BN_is_word(cofactor, (const BN_ULONG)curve.data->cofactor))
+            /* Check the optional seed (ignore if its not set) */
+            && (data->seed_len == 0 || seed_len == 0
+                || ((size_t)data->seed_len == seed_len
+                     && OPENSSL_memcmp(params_seed, seed, seed_len) == 0))
+            /* Check that the groups params match the inbuilt curve params */
+            && OPENSSL_memcmp(param_bytes, params, param_len * NUM_BN_FIELDS)
+                              == 0) {
+            ret = curve.nid;
+            goto end;
         }
     }
     /* Gets here if the group was not found */
     ret = NID_undef;
-err:
-    OPENSSL_free(group_ord_bytes);
-    EC_GROUP_free(tmp);
+end:
+    OPENSSL_free(param_bytes);
+    BN_CTX_end(ctx);
     BN_CTX_free(ctx);
     return ret;
 }
