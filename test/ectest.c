@@ -1557,16 +1557,6 @@ static const unsigned char p521_explicit[] = {
     0xbb, 0x6f, 0xb7, 0x1e, 0x91, 0x38, 0x64, 0x09, 0x02, 0x01, 0x01,
 };
 
-static int do_get_next_prime(BIGNUM *bn, BN_CTX *ctx)
-{
-    do {
-        if (!TEST_true(BN_add_word(bn, 2)))
-            return 0;
-    } while (!BN_is_prime_ex(bn, 64, ctx, NULL));
-
-    return 1;
-}
-
 static int check_named_curve(int id)
 {
     int ret = 0, nid, field_nid, has_seed, rv = 0;
@@ -1615,8 +1605,17 @@ static int check_named_curve(int id)
             || !TEST_true(BN_lshift1(other_p, other_p)))
             goto err;
     } else {
-        if (!TEST_ptr(other_p = BN_dup(group_p))
-            || !TEST_int_eq(do_get_next_prime(other_p, bn_ctx), 1))
+        if (!TEST_ptr(other_p = BN_dup(group_p)))
+            goto err;
+        /*
+         * Just choosing any arbitrary prime does not work..
+         * Setting p via ec_GFp_nist_group_set_curve() needs the prime to be a
+         * nist prime. So only select one of these as an alternate prime.
+         */
+        if (!TEST_ptr(BN_copy(other_p,
+                              BN_ucmp(BN_get0_nist_prime_192(), other_p) == 0 ?
+                                      BN_get0_nist_prime_256() :
+                                      BN_get0_nist_prime_192())))
             goto err;
     }
 
@@ -1705,7 +1704,7 @@ static int check_named_curve(int id)
         || !TEST_int_eq(EC_GROUP_check_named_curve(gtest, 0), nid)
         /* check that changing any curve parameters fail */
         || !TEST_true(EC_GROUP_set_curve(gtest, other_p, group_a, group_b, NULL))
-        || !TEST_int_eq(EC_GROUP_check_named_curve(gtest, 0), 0)
+        || !TEST_int_le(EC_GROUP_check_named_curve(gtest, 0), 0)
         || !TEST_true(EC_GROUP_set_curve(gtest, group_p, other_a, group_b, NULL))
         || !TEST_int_eq(EC_GROUP_check_named_curve(gtest, 0), 0)
         || !TEST_true(EC_GROUP_set_curve(gtest, group_p, group_a, other_b, NULL))
