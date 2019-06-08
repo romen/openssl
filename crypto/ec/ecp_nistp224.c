@@ -923,6 +923,7 @@ static void point_add(felem x3, felem y3, felem z3,
     felem ftmp, ftmp2, ftmp3, ftmp4, ftmp5, x_out, y_out, z_out;
     widefelem tmp, tmp2;
     limb z1_is_zero, z2_is_zero, x_equal, y_equal;
+    limb points_equal;
 
     if (!mixed) {
         /* ftmp2 = z2^2 */
@@ -980,14 +981,26 @@ static void point_add(felem x3, felem y3, felem z3,
 
     /*
      * the formulae are incorrect if the points are equal so we check for
-     * this and do doubling if this happens
+     * this and do doubling if this happens.
+     *
+     * In affine coordinates, (X_1, Y_1) == (X_2, Y_2).
+     *
+     * We use bitwise operations to avoid potential side-channels introduced by
+     * the short-circuiting behaviour of boolean operators.
      */
     x_equal = felem_is_zero(ftmp);
     y_equal = felem_is_zero(ftmp3);
+    /*
+     * The special case of either point being the point at infinity (z{1,2}
+     * is zero), is handled separately later on in this function, so we avoid
+     * jumping to point_double here in those special cases.
+     */
     z1_is_zero = felem_is_zero(z1);
     z2_is_zero = felem_is_zero(z2);
-    /* In affine coordinates, (X_1, Y_1) == (X_2, Y_2) */
-    if (x_equal && y_equal && !z1_is_zero && !z2_is_zero) {
+
+    points_equal = (x_equal & y_equal & (~z1_is_zero) & (~z2_is_zero)) & 1;
+
+    if (points_equal) {
         point_double(x3, y3, z3, x1, y1, z1);
         return;
     }
