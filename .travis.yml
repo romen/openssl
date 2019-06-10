@@ -31,6 +31,26 @@ matrix:
                       - libc6-dev-arm64-cross
           compiler: aarch64-linux-gnu-gcc
           env: CONFIG_OPTS="--strict-warnings enable-ec_nistp_64_gcc_128"
+        - os: linux
+          addons:
+              apt:
+                  packages:
+                      - binutils-arm-linux-gnueabi
+                      - gcc-arm-linux-gnueabi
+                      - cpp-arm-linux-gnueabi
+                      - libc6-dev-armel-cross
+          compiler: arm-linux-gnueabi-gcc
+          env: CONFIG_OPTS="--strict-warnings"
+        - os: linux
+          addons:
+              apt:
+                  packages:
+                      - binutils-arm-linux-gnueabihf
+                      - gcc-arm-linux-gnueabihf
+                      - cpp-arm-linux-gnueabihf
+                      - libc6-dev-armhf-cross
+          compiler: arm-linux-gnueabihf-gcc
+          env: CONFIG_OPTS="--strict-warnings"
     exclude:
         - os: osx
           compiler: i686-w64-mingw32-gcc
@@ -55,6 +75,10 @@ before_script:
           export CROSS_COMPILE=${CC%%gcc}; unset CC;
           export CONFIG_OPTS="$CONFIG_OPTS -Wno-error=shadow";
           ./Configure linux-aarch64 $CONFIG_OPTS;
+      elif [ "$CC" = arm-linux-gnueabi-gcc ] || [ "$CC" = arm-linux-gnueabihf-gcc ]; then
+          export CROSS_COMPILE=${CC%%gcc}; unset CC;
+          export CONFIG_OPTS="$CONFIG_OPTS -Wno-error=shadow";
+          ./Configure linux-armv4 $CONFIG_OPTS;
       else
           if [ "$CC" == gcc ]; then
               export CONFIG_OPTS="$CONFIG_OPTS -Wno-error=shadow";
