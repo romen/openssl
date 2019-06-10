@@ -53,6 +53,26 @@ matrix:
           addons:
               apt:
                   packages:
+                      - binutils-aarch64-linux-gnu
+                      - gcc-aarch64-linux-gnu
+                      - cpp-aarch64-linux-gnu
+                      - libc6-dev-arm64-cross
+          compiler: aarch64-linux-gnu-gcc
+          env: CONFIG_OPTS="--strict-warnings enable-ec_nistp_64_gcc_128" BUILDONLY="yes"
+        - os: linux
+          addons:
+              apt:
+                  packages:
+                      - binutils-arm-linux-gnueabihf
+                      - gcc-arm-linux-gnueabihf
+                      - cpp-arm-linux-gnueabihf
+                      - libc6-dev-armhf-cross
+          compiler: arm-linux-gnueabihf-gcc
+          env: CONFIG_OPTS="--strict-warnings" BUILDONLY="yes"
+        - os: linux
+          addons:
+              apt:
+                  packages:
                       - binutils-mingw-w64
                       - gcc-mingw-w64
           compiler: i686-w64-mingw32-gcc
@@ -164,6 +184,12 @@ before_script:
       elif [ "$CC" = x86_64-w64-mingw32-gcc ]; then
           export CROSS_COMPILE=${CC%%gcc}; unset CC;
           $srcdir/Configure mingw64 $CONFIG_OPTS -Wno-pedantic-ms-format;
+      elif [ "$CC" = aarch64-linux-gnu-gcc ]; then
+          export CROSS_COMPILE=${CC%%gcc}; unset CC;
+          $srcdir/Configure linux-aarch64 $CONFIG_OPTS;
+      elif [ "$CC" = arm-linux-gnueabi-gcc ] || [ "$CC" = arm-linux-gnueabihf-gcc ]; then
+          export CROSS_COMPILE=${CC%%gcc}; unset CC;
+          $srcdir/Configure linux-armv4 $CONFIG_OPTS;
       else
           if [ "$CC" = clang-3.9 ]; then
               sudo cp .travis-apt-pin.preferences /etc/apt/preferences.d/no-ubuntu-clang;
