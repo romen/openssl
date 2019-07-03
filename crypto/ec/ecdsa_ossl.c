@@ -53,7 +53,7 @@ static int ecdsa_sign_setup(EC_KEY *eckey, BN_CTX *ctx_in,
     }
 
     if ((ctx = ctx_in) == NULL) {
-        if ((ctx = BN_CTX_new()) == NULL) {
+        if ((ctx = BN_CTX_new_ex(eckey->libctx)) == NULL) {
             ECerr(EC_F_ECDSA_SIGN_SETUP, ERR_R_MALLOC_FAILURE);
             return 0;
         }
@@ -91,7 +91,7 @@ static int ecdsa_sign_setup(EC_KEY *eckey, BN_CTX *ctx_in,
                     goto err;
                 }
             } else {
-                if (!BN_priv_rand_range(k, order)) {
+                if (!BN_priv_rand_range_ex(k, order, ctx)) {
                     ECerr(EC_F_ECDSA_SIGN_SETUP,
                           EC_R_RANDOM_NUMBER_GENERATION_FAILED);
                     goto err;
@@ -185,7 +185,7 @@ ECDSA_SIG *ossl_ecdsa_sign_sig(const unsigned char *dgst, int dgst_len,
     }
     s = ret->s;
 
-    if ((ctx = BN_CTX_new()) == NULL
+    if ((ctx = BN_CTX_new_ex(eckey->libctx)) == NULL
         || (m = BN_new()) == NULL) {
         ECerr(EC_F_OSSL_ECDSA_SIGN_SIG, ERR_R_MALLOC_FAILURE);
         goto err;
@@ -329,7 +329,7 @@ int ossl_ecdsa_verify_sig(const unsigned char *dgst, int dgst_len,
         return -1;
     }
 
-    ctx = BN_CTX_new();
+    ctx = BN_CTX_new_ex(eckey->libctx);
     if (ctx == NULL) {
         ECerr(EC_F_OSSL_ECDSA_VERIFY_SIG, ERR_R_MALLOC_FAILURE);
         return -1;
