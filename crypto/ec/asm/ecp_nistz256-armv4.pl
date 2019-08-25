@@ -1396,7 +1396,7 @@ my ($Z1sqr, $Z2sqr) = ($Hsqr, $Rsqr);
 # 256-bit vectors on top. Then note that we push
 # starting from r0, which means that we have copy of
 # input arguments just below these temporary vectors.
-# We use three of them for !in1infty, !in2intfy and
+# We use three of them for ~in1infty, ~in2infty and
 # result of check for zero.
 
 $code.=<<___;
@@ -1426,7 +1426,7 @@ ecp_nistz256_point_add:
 #endif
 	movne	r12,#-1
 	stmia	r3,{r4-r11}
-	str	r12,[sp,#32*18+8]	@ !in2infty
+	str	r12,[sp,#32*18+8]	@ ~in2infty
 
 	ldmia	$a_ptr!,{r4-r11}	@ copy in1_x
 	add	r3,sp,#$in1_x
@@ -1447,7 +1447,7 @@ ecp_nistz256_point_add:
 #endif
 	movne	r12,#-1
 	stmia	r3,{r4-r11}
-	str	r12,[sp,#32*18+4]	@ !in1infty
+	str	r12,[sp,#32*18+4]	@ ~in1infty
 
 	add	$a_ptr,sp,#$in2_z
 	add	$b_ptr,sp,#$in2_z
@@ -1512,18 +1512,18 @@ ecp_nistz256_point_add:
 	orr	$a0,$a0,$a2
 	orr	$a4,$a4,$a6
 	orr	$a0,$a0,$a7
-	orr	$a0,$a0,$a4		@ !is_equal(U1,U2)
+	orr	$a0,$a0,$a4		@ ~is_equal(U1,U2)
 
-	ldr	$t0,[sp,#32*18+4]	@ !in1infty
-	ldr	$t1,[sp,#32*18+8]	@ !in2infty
-	ldr	$t2,[sp,#32*18+12]	@ !is_equal(S1,S2)
+	ldr	$t0,[sp,#32*18+4]	@ ~in1infty
+	ldr	$t1,[sp,#32*18+8]	@ ~in2infty
+	ldr	$t2,[sp,#32*18+12]	@ ~is_equal(S1,S2)
 	mvn	$t0,$t0			@ -1/0 -> 0/-1
 	mvn	$t1,$t1			@ -1/0 -> 0/-1
 	orr	$a0,$t0
 	orr	$a0,$t1
 	orrs	$a0,$t2			@ set flags
 
-	@ if(!is_equal(U1,U2) | in1infty | in2infty | !is_equal(S1,S2))
+	@ if(~is_equal(U1,U2) | in1infty | in2infty | ~is_equal(S1,S2))
 	bne	.Ladd_proceed
 
 .Ladd_double:
@@ -1590,15 +1590,15 @@ ecp_nistz256_point_add:
 	add	$b_ptr,sp,#$S2
 	bl	__ecp_nistz256_sub_from	@ p256_sub(res_y, res_y, S2);
 
-	ldr	r11,[sp,#32*18+4]	@ !in1intfy
-	ldr	r12,[sp,#32*18+8]	@ !in2intfy
+	ldr	r11,[sp,#32*18+4]	@ ~in1infty
+	ldr	r12,[sp,#32*18+8]	@ ~in2infty
 	add	r1,sp,#$res_x
 	add	r2,sp,#$in2_x
-	and	r10,r11,r12
+	and	r10,r11,r12		@ ~in1infty & ~in2infty
 	mvn	r11,r11
 	add	r3,sp,#$in1_x
-	and	r11,r11,r12
-	mvn	r12,r12
+	and	r11,r11,r12		@ in1infty & ~in2infty
+	mvn	r12,r12			@ in2infty
 	ldr	$r_ptr,[sp,#32*18+16]
 ___
 for($i=0;$i<96;$i+=8) {			# conditional moves
@@ -1606,11 +1606,11 @@ $code.=<<___;
 	ldmia	r1!,{r4-r5}		@ res_x
 	ldmia	r2!,{r6-r7}		@ in2_x
 	ldmia	r3!,{r8-r9}		@ in1_x
-	and	r4,r4,r10
+	and	r4,r4,r10		@ ~in1infty & ~in2infty
 	and	r5,r5,r10
-	and	r6,r6,r11
+	and	r6,r6,r11		@ in1infty & ~in2infty
 	and	r7,r7,r11
-	and	r8,r8,r12
+	and	r8,r8,r12		@ in2infty
 	and	r9,r9,r12
 	orr	r4,r4,r6
 	orr	r5,r5,r7
@@ -1645,7 +1645,7 @@ my $Z1sqr = $S2;
 # 256-bit vectors on top. Then note that we push
 # starting from r0, which means that we have copy of
 # input arguments just below these temporary vectors.
-# We use two of them for !in1infty, !in2intfy.
+# We use two of them for ~in1infty, ~in2infty.
 
 my @ONE_mont=(1,0,0,-1,-1,-1,-2,0);
 
@@ -1676,7 +1676,7 @@ ecp_nistz256_point_add_affine:
 #endif
 	movne	r12,#-1
 	stmia	r3,{r4-r11}
-	str	r12,[sp,#32*15+4]	@ !in1infty
+	str	r12,[sp,#32*15+4]	@ ~in1infty
 
 	ldmia	$b_ptr!,{r4-r11}	@ copy in2_x
 	add	r3,sp,#$in2_x
@@ -1703,7 +1703,7 @@ ecp_nistz256_point_add_affine:
 	it	ne
 #endif
 	movne	r12,#-1
-	str	r12,[sp,#32*15+8]	@ !in2infty
+	str	r12,[sp,#32*15+8]	@ ~in2infty
 
 	add	$a_ptr,sp,#$in1_z
 	add	$b_ptr,sp,#$in1_z
@@ -1785,15 +1785,15 @@ ecp_nistz256_point_add_affine:
 	add	$b_ptr,sp,#$S2
 	bl	__ecp_nistz256_sub_from	@ p256_sub(res_y, res_y, S2);
 
-	ldr	r11,[sp,#32*15+4]	@ !in1intfy
-	ldr	r12,[sp,#32*15+8]	@ !in2intfy
+	ldr	r11,[sp,#32*15+4]	@ ~in1infty
+	ldr	r12,[sp,#32*15+8]	@ ~in2infty
 	add	r1,sp,#$res_x
 	add	r2,sp,#$in2_x
-	and	r10,r11,r12
+	and	r10,r11,r12		@ ~in1infty & ~in2infty
 	mvn	r11,r11
 	add	r3,sp,#$in1_x
-	and	r11,r11,r12
-	mvn	r12,r12
+	and	r11,r11,r12		@ in1infty & ~in2infty
+	mvn	r12,r12			@ in2infty
 	ldr	$r_ptr,[sp,#32*15]
 ___
 for($i=0;$i<64;$i+=8) {			# conditional moves
@@ -1801,11 +1801,11 @@ $code.=<<___;
 	ldmia	r1!,{r4-r5}		@ res_x
 	ldmia	r2!,{r6-r7}		@ in2_x
 	ldmia	r3!,{r8-r9}		@ in1_x
-	and	r4,r4,r10
+	and	r4,r4,r10		@ ~in1infty & ~in2infty
 	and	r5,r5,r10
-	and	r6,r6,r11
+	and	r6,r6,r11		@ in1infty & ~in2infty
 	and	r7,r7,r11
-	and	r8,r8,r12
+	and	r8,r8,r12		@ in2infty
 	and	r9,r9,r12
 	orr	r4,r4,r6
 	orr	r5,r5,r7
