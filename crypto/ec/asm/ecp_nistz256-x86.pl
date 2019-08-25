@@ -1516,23 +1516,19 @@ for ($i=0;$i<7;$i++) {
 	&or	("eax",&DWP(0,"edi"));
 	&or	("eax",&DWP(4,"edi"));
 	&or	("eax",&DWP(8,"edi"));
-	&or	("eax",&DWP(12,"edi"));
+	&or	("eax",&DWP(12,"edi"));		# !is_equal(U1,U2)
 
+	&mov	("ebx",&DWP(32*18+0,"esp"));	# !in1infty
+	&not	("ebx");			# -1/0 -> 0/-1
+	&or	("eax","ebx");
+	&mov	("ebx",&DWP(32*18+4,"esp"));	# !in2infty
+	&not	("ebx");			# -1/0 -> 0/-1
+	&or	("eax","ebx");
+	&or	("eax",&DWP(32*18+8,"esp"));	# !is_equal(S1,S2)
+
+	# if (!is_equal(U1,U2) | in1infty | in2infty | !is_equal(S1,S2))
 	&data_byte(0x3e);			# predict taken
-	&jnz	(&label("add_proceed"));	# is_equal(U1,U2)?
-
-	&mov	("eax",&DWP(32*18+0,"esp"));
-	&and	("eax",&DWP(32*18+4,"esp"));
-	&mov	("ebx",&DWP(32*18+8,"esp"));
-	&jz	(&label("add_proceed"));	# (in1infty || in2infty)?
-	&test	("ebx","ebx");
-	&jz	(&label("add_double"));		# is_equal(S1,S2)?
-
-	&mov	("edi",&wparam(0));
-	&xor	("eax","eax");
-	&mov	("ecx",96/4);
-	&data_byte(0xfc,0xf3,0xab);		# cld; stosd
-	&jmp	(&label("add_done"));
+	&jnz	(&label("add_proceed"));
 
 &set_label("add_double",16);
 	&mov	("esi",&wparam(1));
