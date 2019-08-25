@@ -1512,33 +1512,20 @@ ecp_nistz256_point_add:
 	orr	$a0,$a0,$a2
 	orr	$a4,$a4,$a6
 	orr	$a0,$a0,$a7
-	orrs	$a0,$a0,$a4
+	orr	$a0,$a0,$a4		@ !is_equal(U1,U2)
 
-	bne	.Ladd_proceed		@ is_equal(U1,U2)?
+	ldr	$t0,[sp,#32*18+4]	@ !in1infty
+	ldr	$t1,[sp,#32*18+8]	@ !in2infty
+	ldr	$t2,[sp,#32*18+12]	@ !is_equal(S1,S2)
+	mvn	$t0,$t0			@ -1/0 -> 0/-1
+	mvn	$t1,$t1			@ -1/0 -> 0/-1
+	orr	$a0,$t0
+	orr	$a0,$t1
+	orrs	$a0,$t2			@ set flags
 
-	ldr	$t0,[sp,#32*18+4]
-	ldr	$t1,[sp,#32*18+8]
-	ldr	$t2,[sp,#32*18+12]
-	tst	$t0,$t1
-	beq	.Ladd_proceed		@ (in1infty || in2infty)?
-	tst	$t2,$t2
-	beq	.Ladd_double		@ is_equal(S1,S2)?
+	@ if(!is_equal(U1,U2) | in1infty | in2infty | !is_equal(S1,S2))
+	bne	.Ladd_proceed
 
-	ldr	$r_ptr,[sp,#32*18+16]
-	eor	r4,r4,r4
-	eor	r5,r5,r5
-	eor	r6,r6,r6
-	eor	r7,r7,r7
-	eor	r8,r8,r8
-	eor	r9,r9,r9
-	eor	r10,r10,r10
-	eor	r11,r11,r11
-	stmia	$r_ptr!,{r4-r11}
-	stmia	$r_ptr!,{r4-r11}
-	stmia	$r_ptr!,{r4-r11}
-	b	.Ladd_done
-
-.align	4
 .Ladd_double:
 	ldr	$a_ptr,[sp,#32*18+20]
 	add	sp,sp,#32*(18-5)+16	@ difference in frame sizes
