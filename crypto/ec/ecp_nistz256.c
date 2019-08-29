@@ -358,16 +358,21 @@ static void ecp_nistz256_point_add(P256_POINT *r,
     ecp_nistz256_sub(H, U2, U1);                /* H = U2 - U1 */
 
     /*
-     * This should not happen during sign/ecdh, so no constant time violation
+     * The formulae are incorrect if the points are equal so we check for
+     * this and do doubling if this happens.
+     *
+     * The affine coordinates are (U1, S1) and (U2, S2).
+     *
+     * The special case of either point being the point at infinity (Z1 or Z2
+     * is zero), is handled separately later on in this function, so we avoid
+     * jumping to point_double here in those special cases.
+     *
+     * We use bitwise operations to avoid potential side-channels introduced by
+     * the short-circuiting behaviour of boolean operators.
      */
-    if (is_equal(U1, U2) && !in1infty && !in2infty) {
-        if (is_equal(S1, S2)) {
-            ecp_nistz256_point_double(r, a);
-            return;
-        } else {
-            memset(r, 0, sizeof(*r));
-            return;
-        }
+    if (is_equal(U1, U2) & ~in1infty & ~in2infty & is_equal(S1, S2)) {
+        ecp_nistz256_point_double(r, a);
+        return;
     }
 
     ecp_nistz256_sqr_mont(Rsqr, R);             /* R^2 */
