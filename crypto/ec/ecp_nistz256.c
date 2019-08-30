@@ -361,11 +361,20 @@ static void ecp_nistz256_point_add(P256_POINT *r,
      * The formulae are incorrect if the points are equal so we check for
      * this and do doubling if this happens.
      *
-     * The affine coordinates are (U1, S1) and (U2, S2).
+     * It is easy to prove that is_equal(U1, U2) implies that the affine
+     * x-coordinates are equal, or either point is at infinity.
+     * Likewise is_equal(S1, S2) implies that the affine y-coordinates are
+     * equal, or either point is at infinity.
      *
      * The special case of either point being the point at infinity (Z1 or Z2
      * is zero), is handled separately later on in this function, so we avoid
      * jumping to point_double here in those special cases.
+     *
+     * When both points are inverse of each other, we know that the affine
+     * x-coordinates are equal, and the y-coordinates have different sign.
+     * Therefore since U1 = U2, we know H = 0, and therefore Z3 = H*Z1*Z2
+     * will equal 0, thus the result is infinity, if we simply let this
+     * function continue normally.
      *
      * We use bitwise operations to avoid potential side-channels introduced by
      * the short-circuiting behaviour of boolean operators.
