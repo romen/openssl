@@ -19,6 +19,7 @@
 #include <openssl/provider.h>
 #include <openssl/core.h>
 #include <openssl/core_numbers.h>
+#include <string.h>
 
 typedef enum OPTION_choice {
     OPT_ERR = -1, OPT_EOF = 0, OPT_HELP,
@@ -108,6 +109,125 @@ static void print_method_names(BIO *out, INFO *info)
     info->collect_names_fn(info->method, names);
     print_names(out, names);
     sk_OPENSSL_CSTRING_free(names);
+}
+
+static
+void print_param(OSSL_PROVIDER *prov, const OSSL_PARAM *param, int indent)
+{
+    static char req_buffer[512] = { 0 };
+    static char buffer[1024] = { 0 };
+    size_t bufsz = sizeof(buffer);
+    char *buf = buffer;
+    int printed_len;
+    OSSL_PARAM req[] = { OSSL_PARAM_END, OSSL_PARAM_END };
+
+    if (param == NULL || param->key == NULL)
+        return;
+
+    printed_len = BIO_snprintf(buf, bufsz, "%s = <", param->key);
+    if (printed_len > 0) {
+        buf += printed_len;
+        bufsz -= printed_len;
+    }
+
+    switch(param->data_type) {
+#if 0
+    case OSSL_PARAM_INTEGER:
+        do {
+            long int val;
+
+            if (!OSSL_PARAM_get_long_int(param, &val))
+                goto err;
+
+            printed_len = BIO_snprintf(buf, bufsz, "%ld", val);
+            if (printed_len > 0) {
+                buf += printed_len;
+                bufsz -= printed_len;
+            }
+        } while(0);
+        break;
+    case OSSL_PARAM_UNSIGNED_INTEGER:
+        break;
+    case OSSL_PARAM_REAL:
+        break;
+#endif
+    case OSSL_PARAM_UTF8_STRING:
+        do {
+            int must_free = 0;
+            char *val = NULL;
+
+            req[0] = OSSL_PARAM_construct_utf8_string(param->key,
+                                                      req_buffer,
+                                                      sizeof(req_buffer)-1);
+
+            if (!OSSL_PROVIDER_get_params(prov, req)) {
+                val = (char *)"{OSSL_PROVIDER_get_params() failure}";
+            } else if (!OSSL_PARAM_get_utf8_string(&req[0], &val, 0)) {
+                val = (char *)"{error retrieving data}";
+            } else {
+                must_free = 1;
+            }
+
+            printed_len = BIO_snprintf(buf, bufsz, "%s", val);
+            if (printed_len > 0) {
+                buf += printed_len;
+                bufsz -= printed_len;
+            }
+
+            if (must_free)
+                OPENSSL_free(val);
+        } while(0);
+        break;
+    case OSSL_PARAM_UTF8_PTR:
+        do {
+            const char *val = NULL;
+
+            req[0] = OSSL_PARAM_construct_utf8_ptr(param->key,
+                                                   (char **)&req_buffer,
+                                                   0);
+
+            if (!OSSL_PROVIDER_get_params(prov, req)) {
+                val = (char *)"{OSSL_PROVIDER_get_params() failure}";
+            } else if (!OSSL_PARAM_get_utf8_ptr(&req[0], &val)) {
+                val = "{error retrieving data}";
+            }
+
+            printed_len = BIO_snprintf(buf, bufsz, "%s", val);
+            if (printed_len > 0) {
+                buf += printed_len;
+                bufsz -= printed_len;
+            }
+        } while(0);
+        break;
+#if 0
+    case OSSL_PARAM_OCTET_STRING:
+        break;
+    case OSSL_PARAM_OCTET_PTR:
+        break;
+#endif
+    default:
+        do {
+            char * val = "{unprintable data type}";
+            printed_len = BIO_snprintf(buf, bufsz, "%s", val);
+            if (printed_len > 0) {
+                buf += printed_len;
+                bufsz -= printed_len;
+            }
+        } while(0);
+        break;
+    }
+
+    printed_len = BIO_snprintf(buf, bufsz, ">");
+    if (printed_len > 0) {
+        buf += printed_len;
+        bufsz -= printed_len;
+    }
+    *buf = '\0';
+
+    BIO_printf(bio_out, "%*s%s\n", indent, "", buffer);
+
+    memset(req_buffer, 0, sizeof(req_buffer));
+    memset(buffer, 0, sizeof(buffer));
 }
 
 static void print_caps(META *meta, INFO *info)
@@ -287,6 +407,21 @@ int provider_main(int argc, char **argv)
 
         if (prov != NULL) {
             BIO_printf(bio_out, verbose == 0 ? "%s\n" :  "[ %s ]\n", name);
+
+            if (verbose > 0) {
+                const OSSL_PARAM *params = OSSL_PROVIDER_gettable_params(prov);
+
+                print_param_types("retrievable provider parameters",
+                                  params, 1);
+
+                if (verbose > 1 && params != 0) {
+                    const OSSL_PARAM *p = &params[0];
+
+                    for (; p->key != NULL; p++) {
+                        print_param(prov, p, 8);
+                    }
+                }
+            }
 
             if (verbose > 0) {
                 META data;
