@@ -408,13 +408,13 @@ int provider_main(int argc, char **argv)
         if (prov != NULL) {
             BIO_printf(bio_out, verbose == 0 ? "%s\n" :  "[ %s ]\n", name);
 
-            if (verbose > 0) {
+            if (verbose > 1) {
                 const OSSL_PARAM *params = OSSL_PROVIDER_gettable_params(prov);
 
                 print_param_types("retrievable provider parameters",
                                   params, 1);
 
-                if (verbose > 1 && params != 0) {
+                if (verbose > 2 && params != 0) {
                     const OSSL_PARAM *p = &params[0];
 
                     for (; p->key != NULL; p++) {
