@@ -24,6 +24,10 @@ OpenSSL 3.0
 
 ### Changes between 1.1.1 and 3.0 [xx XXX xxxx] ###
 
+ * Add the fabulous foo feature.
+
+   *Nicola Tuveri*
+
  * Deprecated EC_POINT_set_Jprojective_coordinates_GFp() and
    EC_POINT_get_Jprojective_coordinates_GFp(). These functions are not widely
    used and applications should instead use the
