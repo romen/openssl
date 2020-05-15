@@ -14,7 +14,8 @@
 #include <openssl/kdf.h>
 #include <openssl/core_names.h>
 
-#define TLS13_MAX_LABEL_LEN     249
+#define TLS13_MAX_LABEL_LEN            249
+#define TLS13_MAX_TYPICAL_LABEL_LEN     31
 
 /* Always filled with zeros */
 static const unsigned char default_zeros[EVP_MAX_MD_SIZE];
@@ -42,7 +43,7 @@ int tls13_hkdf_expand(SSL *s, const EVP_MD *md, const unsigned char *secret,
     OSSL_PARAM params[5], *p = params;
     int mode = EVP_PKEY_HKDEF_MODE_EXPAND_ONLY;
     const char *mdname = EVP_MD_name(md);
-    int ret;
+    int ret = 0;
     size_t hkdflabellen;
     size_t hashlen;
     /*
@@ -50,9 +51,16 @@ int tls13_hkdf_expand(SSL *s, const EVP_MD *md, const unsigned char *secret,
      * prefix and label + bytes for the label itself + 1 byte length of hash
      * + bytes for the hash itself
      */
-    unsigned char hkdflabel[sizeof(uint16_t) + sizeof(uint8_t)
-                            + (sizeof(label_prefix) - 1) + TLS13_MAX_LABEL_LEN
-                            + 1 + EVP_MAX_MD_SIZE];
+#define HKDF_LABEL_OVERHEAD (sizeof(uint16_t) + sizeof(uint8_t) \
+                             + (sizeof(label_prefix) - 1) \
+                             + 1 + EVP_MAX_MD_SIZE)
+#ifdef OPENSSL_SMALL_FOOTPRINT
+    unsigned char hkdflabelst[HKDF_LABEL_OVERHEAD + TLS13_MAX_TYPICAL_LABEL_LEN];
+#else
+    unsigned char hkdflabelst[HKDF_LABEL_OVERHEAD + TLS13_MAX_LABEL_LEN];
+#endif
+    unsigned char *hkdflabel = hkdflabelst;
+    size_t hkdflabelsize = sizeof(hkdflabelst);
     WPACKET pkt;
 
     kctx = EVP_KDF_CTX_new(kdf);
@@ -71,13 +79,28 @@ int tls13_hkdf_expand(SSL *s, const EVP_MD *md, const unsigned char *secret,
              */
             SSLerr(SSL_F_TLS13_HKDF_EXPAND, SSL_R_TLS_ILLEGAL_EXPORTER_LABEL);
         }
-        EVP_KDF_CTX_free(kctx);
-        return 0;
+        goto err;
     }
+#ifdef OPENSSL_SMALL_FOOTPRINT
+    if (labellen > TLS13_MAX_TYPICAL_LABEL_LEN) {
+        hkdflabelsize = HKDF_LABEL_OVERHEAD + labellen;
+        hkdflabel = OPENSSL_malloc(hkdflabelsize);
+        if (hkdflabel == NULL) {
+            if (fatal) {
+                SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_F_TLS13_HKDF_EXPAND,
+                         ERR_R_MALLOC_FAILURE);
+            } else {
+                SSLerr(SSL_F_TLS13_HKDF_EXPAND, ERR_R_MALLOC_FAILURE);
+            }
+            goto err;
+        }
+    }
+#endif
+
 
     hashlen = EVP_MD_size(md);
 
-    if (!WPACKET_init_static_len(&pkt, hkdflabel, sizeof(hkdflabel), 0)
+    if (!WPACKET_init_static_len(&pkt, hkdflabel, hkdflabelsize, 0)
             || !WPACKET_put_bytes_u16(&pkt, outlen)
             || !WPACKET_start_sub_packet_u8(&pkt)
             || !WPACKET_memcpy(&pkt, label_prefix, sizeof(label_prefix) - 1)
@@ -86,14 +109,13 @@ int tls13_hkdf_expand(SSL *s, const EVP_MD *md, const unsigned char *secret,
             || !WPACKET_sub_memcpy_u8(&pkt, data, (data == NULL) ? 0 : datalen)
             || !WPACKET_get_total_written(&pkt, &hkdflabellen)
             || !WPACKET_finish(&pkt)) {
-        EVP_KDF_CTX_free(kctx);
         WPACKET_cleanup(&pkt);
         if (fatal)
             SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_F_TLS13_HKDF_EXPAND,
                      ERR_R_INTERNAL_ERROR);
         else
             SSLerr(SSL_F_TLS13_HKDF_EXPAND, ERR_R_INTERNAL_ERROR);
-        return 0;
+        goto err;
     }
 
     *p++ = OSSL_PARAM_construct_int(OSSL_KDF_PARAM_MODE, &mode);
@@ -105,12 +127,10 @@ int tls13_hkdf_expand(SSL *s, const EVP_MD *md, const unsigned char *secret,
                                              hkdflabel, hkdflabellen);
     *p++ = OSSL_PARAM_construct_end();
 
-    ret = EVP_KDF_CTX_set_params(kctx, params) <= 0
-        || EVP_KDF_derive(kctx, out, outlen) <= 0;
+    ret = EVP_KDF_CTX_set_params(kctx, params) > 0
+          && EVP_KDF_derive(kctx, out, outlen) > 0;
 
-    EVP_KDF_CTX_free(kctx);
-
-    if (ret != 0) {
+    if (!ret) {
         if (fatal)
             SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_F_TLS13_HKDF_EXPAND,
                      ERR_R_INTERNAL_ERROR);
@@ -118,7 +138,13 @@ int tls13_hkdf_expand(SSL *s, const EVP_MD *md, const unsigned char *secret,
             SSLerr(SSL_F_TLS13_HKDF_EXPAND, ERR_R_INTERNAL_ERROR);
     }
 
-    return ret == 0;
+ err:
+#ifdef OPENSSL_SMALL_FOOTPRINT
+    if (hkdflabel != hkdflabelst)
+        OPENSSL_free(hkdflabel);
+#endif
+    EVP_KDF_CTX_free(kctx);
+    return ret;
 }
 
 /*
