@@ -32,7 +32,7 @@ compiler:
 env:
     - CONFIG_OPTS="" DESTDIR="_install"
     - CONFIG_OPTS="no-asm -Werror --debug no-afalgeng no-shared enable-crypto-mdebug enable-rc5 enable-md2"
-    - CONFIG_OPTS="no-asm no-makedepend enable-buildtest-c++ --strict-warnings -D_DEFAULT_SOURCE" BUILDONLY="yes" CHECKDOCS="yes" GENERATE="yes" CPPFLAGS="-ansi"
+    - CONFIG_OPTS="no-asm no-makedepend enable-buildtest-c++ --strict-warnings -D_DEFAULT_SOURCE" BUILDONLY="yes" CHECKDOCS="yes" GENERATE="yes" CPPFLAGS="-ansi" OOT_BUILD_DIR="../_build"
 
 jobs:
     include:
@@ -182,6 +182,11 @@ before_script:
           cd _build;
           srcdir=../_srcdist;
           top=..;
+      elif [ -n "$OOT_BUILD_DIR" ]; then
+          srcdir=$PWD;
+          mkdir -p "$OOT_BUILD_DIR";
+          cd "$OOT_BUILD_DIR";
+          top=$srcdir;
       else
           srcdir=.;
           top=.;
@@ -230,6 +235,8 @@ script:
     - top=${PWD}
     - if [ -n "$DESTDIR" ]; then
           cd _build;
+      elif [ -n "$OOT_BUILD_DIR" ]; then
+          cd "$OOT_BUILD_DIR";
       fi
     - if $make update; then
           echo -e '+\057 MAKE UPDATE OK';
@@ -237,7 +244,14 @@ script:
           echo -e '+\057 MAKE UPDATE FAILED';
           travis_terminate 1;
       fi
-    - git diff --exit-code
+    - if git rev-parse --git-dir &>/dev/null ; then
+          if ! git diff --exit-code; then
+              echo -e '+\057\057 FAILED -- UPDATED FILES NOT COMMITTED';
+              travis_terminate 1;
+          fi;
+      else
+          echo -e '+\057 SKIPPING UPDATED FILES CHECK -- NOT IN A GIT REPO';
+      fi
     - if [ -n "$CHECKDOCS" ]; then
           if $make doc-nits; then
               echo -e '+\057\057 MAKE DOC-NITS OK';
