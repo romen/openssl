@@ -1,5 +1,5 @@
 
-#ifdef __SIZEOF_INT128__
+#if defined(__SIZEOF_INT128__) && !defined(PEDANTIC)
 #include <stdint.h>
 #include <string.h>
 #define LIMB_BITS 64
@@ -4300,10 +4300,8 @@ const EC_METHOD *ec_GFp_secp384r1_method(void) {
     return &ret;
 }
 
+#else
 
-#endif /* __SIZEOF_INT128__ */
-
-#ifndef __SIZEOF_INT128__
 #include <stdint.h>
 #include <string.h>
 #define LIMB_BITS 32
