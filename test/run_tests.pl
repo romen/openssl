@@ -265,7 +265,7 @@ unless (defined $eres) {
             }
 
             $Test::Harness::switches = join(' ', @switches);
-            Test::Harness::runtests(@args);
+            Test::Harness::runtests(reverse @args);
         }
 
         package main;
@@ -282,7 +282,7 @@ unless (defined $eres) {
 my $harness = $package->new(\%tapargs);
 my $ret =
     $harness->runtests(map { [ abs2rel($_, rel2abs(curdir())), $tests{$_} ] }
-                       sort keys %tests);
+                       reverse sort keys %tests);
 
 # $ret->has_errors may be any number, not just 0 or 1.  On VMS, numbers
 # from 2 and on are used as is as VMS statuses, which has severity encoded
