@@ -12,6 +12,7 @@
 #include "ec_local.h"
 #include <openssl/err.h>
 #include <openssl/obj_mac.h>
+#include <openssl/objects.h>
 #include <openssl/opensslconf.h>
 #include "internal/nelem.h"
 
@@ -3019,6 +3020,7 @@ static EC_GROUP *ec_group_new_from_data(const ec_list_element curve)
     const EC_METHOD *meth;
     const EC_CURVE_DATA *data;
     const unsigned char *params;
+    ASN1_OBJECT *asn1obj = NULL;
 
     /* If no curve data curve method must handle everything */
     if (curve.data == NULL)
@@ -3097,12 +3099,34 @@ static EC_GROUP *ec_group_new_from_data(const ec_list_element curve)
             goto err;
         }
     }
+
+    /*
+     * Some curves don't have an associated OID: for those we should not default
+     * to `OPENSSL_EC_NAMED_CURVE` encoding of parameters and instead set the
+     * ASN1 flag to `OPENSSL_EC_EXPLICIT_CURVE`.
+     *
+     * Note that `OPENSSL_EC_NAMED_CURVE` is set as the default ASN1 flag on
+     * `EC_GROUP_new()`, when we don't have enough elements to determine if an
+     * OID for the curve name actually exists.
+     * We could implement this check on `EC_GROUP_set_curve_name()` but
+     * overloading the simple setter with this lookup could have a negative
+     * performance impact and unexpected consequences.
+     */
+    asn1obj = OBJ_nid2obj(curve.nid);
+    if (asn1obj == NULL) {
+        ECerr(EC_F_EC_GROUP_NEW_FROM_DATA, ERR_R_OBJ_LIB);
+        goto err;
+    }
+    if (OBJ_length(asn1obj) == 0)
+        EC_GROUP_set_asn1_flag(group, OPENSSL_EC_EXPLICIT_CURVE);
+
     ok = 1;
  err:
     if (!ok) {
         EC_GROUP_free(group);
         group = NULL;
     }
+    ASN1_OBJECT_free(asn1obj);
     EC_POINT_free(P);
     BN_CTX_free(ctx);
     BN_free(p);
