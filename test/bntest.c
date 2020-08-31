@@ -1471,6 +1471,45 @@ static int file_quotient(STANZA *s)
     return st;
 }
 
+static int file_modinv(STANZA *s)
+{
+    BIGNUM *a = NULL, *m = NULL, *mod_inv = NULL, *ret = NULL, *gcd = NULL;
+    int st = 0;
+
+    if (!TEST_ptr(a = getBN(s, "A"))
+            || !TEST_ptr(m = getBN(s, "M"))
+            || !TEST_ptr(mod_inv = getBN(s, "ModInv"))
+            || !TEST_ptr(gcd = BN_new())
+            || !TEST_ptr(ret = BN_new()))
+        goto err;
+
+    if (!TEST_true(BN_gcd(gcd, a, m, ctx))
+            || !equalBN("GCD(A, M)", BN_value_one(), gcd)) {
+        TEST_error("Stanza error: A and M are not coprime.");
+        goto err;
+    }
+
+    if (!TEST_true(BN_mod_mul(ret, a, mod_inv, m, ctx))
+            || !equalBN("A * ModInv (mod M)", BN_value_one(), ret)) {
+        TEST_error("Stanza error: the expected ModInv is not the inverse "
+                   "of A (mod M).");
+        goto err;
+    }
+
+    if (!TEST_true(BN_mod_inverse(ret, a, m, ctx))
+            || !equalBN("A * x = 1 (mod M)", mod_inv, ret))
+        goto err;
+
+    st = 1;
+ err:
+    BN_free(a);
+    BN_free(m);
+    BN_free(mod_inv);
+    BN_free(gcd);
+    BN_free(ret);
+    return st;
+}
+
 static int file_modmul(STANZA *s)
 {
     BIGNUM *a = NULL, *b = NULL, *m = NULL, *mod_mul = NULL, *ret = NULL;
@@ -2696,6 +2735,7 @@ static int file_test_run(STANZA *s)
         {"Square", file_square},
         {"Product", file_product},
         {"Quotient", file_quotient},
+        {"ModInv", file_modinv},
         {"ModMul", file_modmul},
         {"ModExp", file_modexp},
         {"Exp", file_exp},
