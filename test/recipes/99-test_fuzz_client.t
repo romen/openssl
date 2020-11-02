@@ -12,24 +12,17 @@ use warnings;
 use OpenSSL::Test qw/:DEFAULT srctop_file/;
 use OpenSSL::Test::Utils;
 
-setup("test_fuzz");
+setup("test_fuzz_client");
 
 my @fuzzers = ();
 @fuzzers = split /\s+/, $ENV{FUZZ_TESTS} if $ENV{FUZZ_TESTS};
 
-if (!@fuzzers) {
-    @fuzzers = (
-        # those commented here as very slow were moved to separate runs
-        #'asn1', # very slow -> 99-test_fuzz_asn1.t
-        'asn1parse', 'bignum', 'bndiv', 'conf','crl',
-        #'client', # very slow -> 99-test_fuzz_client.t
-        #'server', # very slow -> 99-test_fuzz_server.t
-        'x509'
-        );
-    push @fuzzers, 'cmp' if !disabled("cmp");
-    push @fuzzers, 'cms' if !disabled("cms");
-    push @fuzzers, 'ct' if !disabled("ct");
-}
+plan skip_all => "Run only test_fuzz when the env variable FUZZ_TESTS is set"
+    if @fuzzers;
+
+@fuzzers = (
+    'client', # very slow
+);
 
 plan tests => scalar @fuzzers + 1; # one more due to below require_ok(...)
 
