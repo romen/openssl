@@ -12,7 +12,7 @@ use warnings;
 use OpenSSL::Test qw/:DEFAULT srctop_file/;
 use OpenSSL::Test::Utils;
 
-setup("test_fuzz_asn1");
+setup("test_fuzz_asn1_2");
 
 my @fuzzers = ();
 @fuzzers = split /\s+/, $ENV{FUZZ_TESTS} if $ENV{FUZZ_TESTS};
@@ -20,9 +20,7 @@ my @fuzzers = ();
 plan skip_all => "Run only test_fuzz when the env variable FUZZ_TESTS is set"
     if @fuzzers;
 
-@fuzzers = (
-    'asn1', # very slow
-);
+@fuzzers = ('asn1/2');
 
 plan tests => scalar @fuzzers + 1; # one more due to below require_ok(...)
 

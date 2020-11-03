@@ -16,11 +16,13 @@ sub fuzz_tests {
 
     foreach my $f (@fuzzers) {
         subtest "Fuzzing $f" => sub {
-            my @dir = glob(srctop_file('fuzz', 'corpora', "$f"));
+            my @tokens = split(/\//, $f);
+            my @dir = glob(srctop_file('fuzz', 'corpora', @tokens));
 
             plan skip_all => "No directory fuzz/corpora/$f" unless @dir;
             plan tests => scalar @dir; # likely 1
 
+            $f = @tokens[0];
             foreach (@dir) {
                 ok(run(fuzz(["$f-test", $_])));
             }
