@@ -12,9 +12,9 @@ use warnings;
 use OpenSSL::Test qw/:DEFAULT srctop_file/;
 use OpenSSL::Test::Utils;
 
-setup("test_fuzz_asn1");
+setup("test_fuzz_asn1_9");
 
-my @fuzzers = ('asn1');
+my @fuzzers = ('asn1/9');
 
 plan tests => scalar @fuzzers + 1; # one more due to below require_ok(...)
 

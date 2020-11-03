@@ -110,11 +110,27 @@ To reproduce the crash you can run:
 
     fuzz/$FUZZER-test $file
 
-To do all the tests of a specific fuzzer such as asn1 you can run
+To do all the tests of a specific fuzzer such as crl you can run
 
-    fuzz/asn1-test fuzz/corpora/asn1
+    fuzz/crl-test fuzz/corpora/crl
+
 or
-    make test TESTS=fuzz_test_asn1
+
+    make test TESTS=fuzz_test_crl
+
+Notice the corpus of the asn1 fuzzer has been split into 16 groups
+numbered from `0` to `f`. To do all the tests in a specific asn1 corpus
+group (e.g., `a`) you can run
+
+    fuzz/asn1-test fuzz/corpora/asn1/a
+
+or
+
+    make test TESTS=fuzz_test_asn1_a
+
+To do all the tests of the asn1 fuzzer you can run:
+
+    make test TESTS='fuzz_test_asn1_*'
 
 To run several fuzz tests you can use for instance:
 
