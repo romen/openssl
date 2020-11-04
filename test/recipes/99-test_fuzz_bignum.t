@@ -12,24 +12,9 @@ use warnings;
 use OpenSSL::Test qw/:DEFAULT srctop_file/;
 use OpenSSL::Test::Utils;
 
-setup("test_fuzz");
+setup("test_fuzz_bignum");
 
-my @fuzzers = ();
-@fuzzers = split /\s+/, $ENV{FUZZ_TESTS} if $ENV{FUZZ_TESTS};
-
-if (!@fuzzers) {
-    @fuzzers = (
-        # those commented here as very slow could be moved to separate runs
-        'asn1', # very slow
-        'asn1parse', 'bignum', 'bndiv', 'conf','crl',
-        'client', # very slow
-        'server', # very slow
-        'x509'
-        );
-    push @fuzzers, 'cmp' if !disabled("cmp");
-    push @fuzzers, 'cms' if !disabled("cms");
-    push @fuzzers, 'ct' if !disabled("ct");
-}
+my @fuzzers = ('bignum');
 
 plan tests => scalar @fuzzers + 1; # one more due to below require_ok(...)
 
