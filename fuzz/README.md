@@ -118,17 +118,17 @@ or
 
     make test TESTS=fuzz_test_crl
 
-Notice the corpus of the asn1 fuzzer has been split into 16 groups
-numbered from `0` to `f`. To do all the tests in a specific asn1 corpus
-group (e.g., `a`) you can run
+Notice that the test recipe for the asn1 fuzzer is split into 16 groups,
+numbered from `0` to `f`. To do all the tests in specific asn1 corpus
+groups (e.g., `2` and `a`) you can run
 
-    fuzz/asn1-test fuzz/corpora/asn1/a
-
-or
-
-    make test TESTS=fuzz_test_asn1_a
+    make test TESTS='fuzz_test_asn1_{2,a}'
 
 To do all the tests of the asn1 fuzzer you can run:
+
+    fuzz/asn1-test fuzz/corpora/asn1
+
+or
 
     make test TESTS='fuzz_test_asn1_*'
 

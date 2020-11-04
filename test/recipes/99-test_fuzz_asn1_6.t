@@ -12,12 +12,12 @@ use warnings;
 use OpenSSL::Test qw/:DEFAULT srctop_file/;
 use OpenSSL::Test::Utils;
 
-setup("test_fuzz_asn1_6");
+my $fuzzer = "asn1";
+my $corpus_group = "6";
+setup("test_fuzz_${fuzzer}_${corpus_group}");
 
-my @fuzzers = ('asn1/6');
-
-plan tests => scalar @fuzzers + 1; # one more due to below require_ok(...)
+plan tests => scalar 2; # one more due to below require_ok(...)
 
 require_ok(srctop_file('test','recipes','fuzz.pl'));
 
-&fuzz_tests(@fuzzers);
+subtest "Fuzzing $fuzzer" => \&fuzz_test, "${fuzzer}/${corpus_group}*";

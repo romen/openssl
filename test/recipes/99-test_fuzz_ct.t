@@ -22,4 +22,4 @@ plan tests => scalar 2; # one more due to below require_ok(...)
 
 require_ok(srctop_file('test','recipes','fuzz.pl'));
 
-&fuzz_tests($fuzzer);
+subtest "Fuzzing $fuzzer" => \&fuzz_test, $fuzzer;

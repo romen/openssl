@@ -11,26 +11,19 @@ use warnings;
 use OpenSSL::Glob;
 use OpenSSL::Test qw/:DEFAULT srctop_file/;
 
-sub fuzz_tests {
-    my @fuzzers = @_;
+sub fuzz_test {
+    die "Too many arguments" if scalar @_ > 1;
 
-    foreach my $f (@fuzzers) {
-        subtest "Fuzzing $f" => sub {
-            my @tokens = split(/\//, $f);
-            my @dir = glob(srctop_file('fuzz', 'corpora', @tokens));
+    my $d = $_[0];
+    my @tokens = split(/\//, $d);
+    my @dir = glob(srctop_file('fuzz', 'corpora', @tokens));
 
-            plan skip_all => "No directory fuzz/corpora/$f" unless @dir;
-            plan tests => scalar @dir; # likely 1
+    plan skip_all => "No directory fuzz/corpora/$d" unless @dir;
+    plan tests => scalar @dir;
 
-            $f = @tokens[0];
-            foreach (@dir) {
-                if ( -d $_ ) {
-                    ok(run(fuzz(["$f-test", $_])));
-                } else {
-                    print STDERR "No directory $_";
-                }
-            }
-        }
+    my $f = $tokens[0];
+    foreach (@dir) {
+        ok(run(fuzz(["$f-test", $_])));
     }
 }
 
