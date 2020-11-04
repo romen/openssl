@@ -12,16 +12,14 @@ use warnings;
 use OpenSSL::Test qw/:DEFAULT srctop_file/;
 use OpenSSL::Test::Utils;
 
-setup("test_fuzz_cms");
+my $fuzzer = "cms";
+setup("test_fuzz_${fuzzer}");
 
-if (disabled("cms")) {
-    plan skip_all => "This test requires cms support";
-} else {
-    my @fuzzers = ('cms');
+plan skip_all => "This test requires $fuzzer support"
+    if disabled($fuzzer);
 
-    plan tests => scalar @fuzzers + 1; # one more due to below require_ok(...)
+plan tests => scalar 2; # one more due to below require_ok(...)
 
-    require_ok(srctop_file('test','recipes','fuzz.pl'));
+require_ok(srctop_file('test','recipes','fuzz.pl'));
 
-    &fuzz_tests(@fuzzers);
-}
+&fuzz_tests($fuzzer);

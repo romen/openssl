@@ -12,16 +12,14 @@ use warnings;
 use OpenSSL::Test qw/:DEFAULT srctop_file/;
 use OpenSSL::Test::Utils;
 
-setup("test_fuzz_cmp");
+my $fuzzer = "cmp";
+setup("test_fuzz_${fuzzer}");
 
-if (disabled("cmp")) {
-    plan skip_all => "This test requires cmp support";
-} else {
-    my @fuzzers = ('cmp');
+plan skip_all => "This test requires $fuzzer support"
+    if disabled($fuzzer);
 
-    plan tests => scalar @fuzzers + 1; # one more due to below require_ok(...)
+plan tests => scalar 2; # one more due to below require_ok(...)
 
-    require_ok(srctop_file('test','recipes','fuzz.pl'));
+require_ok(srctop_file('test','recipes','fuzz.pl'));
 
-    &fuzz_tests(@fuzzers);
-}
+&fuzz_tests($fuzzer);
