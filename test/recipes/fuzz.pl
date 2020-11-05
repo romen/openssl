@@ -13,6 +13,7 @@ use OpenSSL::Test qw/:DEFAULT srctop_file/;
 use Data::Dumper;
 
 sub fuzz_test {
+    die "No arguments?" if scalar @_ == 0;
     die "Too many arguments" if scalar @_ > 1;
 
     my $d = $_[0];
