@@ -18,7 +18,7 @@ setup("test_fuzz_${fuzzer}");
 plan skip_all => "This test requires $fuzzer support"
     if disabled($fuzzer);
 
-plan tests => scalar 2; # one more due to below require_ok(...)
+plan tests => 2; # one more due to below require_ok(...)
 
 require_ok(srctop_file('test','recipes','fuzz.pl'));
 
