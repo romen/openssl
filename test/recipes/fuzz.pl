@@ -10,6 +10,7 @@ use warnings;
 
 use OpenSSL::Glob;
 use OpenSSL::Test qw/:DEFAULT srctop_file/;
+use Data::Dumper;
 
 sub fuzz_test {
     die "Too many arguments" if scalar @_ > 1;
@@ -22,6 +23,10 @@ sub fuzz_test {
     plan tests => scalar @dir;
 
     my $f = $tokens[0];
+    unless ($f) {
+        diag(Data::Dumper->Dump([   $d, [ @tokens ], $f ],
+                                [qw( d     tokens     f)]));
+    }
     foreach (@dir) {
         ok(run(fuzz(["$f-test", $_])));
     }

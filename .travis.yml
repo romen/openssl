@@ -239,6 +239,10 @@ script:
               echo -e '\052\052 FAILED -- MAKE TEST';
               travis_terminate 1;
           fi;
+          if ! travis_wait 60 make _tests V=1 TESTS=test_fuzz_asn1_0; then
+              echo -e '\052\052 FAILED -- MAKE TEST asn1-fuzz';
+              travis_terminate 1;
+          fi;
       else
           if ! $make build_tests >~/build.log 2>&1; then
               echo -e '\052\052 FAILED -- MAKE BUILD_TESTS';
