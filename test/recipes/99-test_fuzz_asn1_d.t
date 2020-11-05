@@ -16,7 +16,7 @@ my $fuzzer = "asn1";
 my $corpus_group = "d";
 setup("test_fuzz_${fuzzer}_${corpus_group}");
 
-plan tests => scalar 2; # one more due to below require_ok(...)
+plan tests => 2; # one more due to below require_ok(...)
 
 require_ok(srctop_file('test','recipes','fuzz.pl'));
 
